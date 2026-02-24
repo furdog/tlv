@@ -27,18 +27,26 @@
  * With best wishes and respect, furdog
  */
 
-#pragma once
+#ifndef   TLV_HEADER_GUARD
+#define   TLV_HEADER_GUARD
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
+
+typedef uint8_t tlv_tag_t; /**< TLV tag data type */
+typedef uint8_t tlv_len_t; /**< TLV len data type */
+
+/** Total size of tlv_tag_t and tlv_len_t */
+#define TLV_TAGLEN_SIZE (sizeof(tlv_tag_t) + sizeof(tlv_len_t))
 
 /** Entry which used to store data in TLV buffer. Not stored explicitly,
  *  but used by other methods. */ 
 struct tlv_entry {
-	uint8_t tag; /**< User specified data type */
-	uint8_t len; /**< Entry Data length (255 bytes max) */
-	void   *val; /**< User specified data */
+	tlv_tag_t tag; /**< User specified data type */
+	tlv_len_t len; /**< Entry Data length (255 bytes max) */
+	void     *val; /**< User specified data */
 };
 
 /** Buffer data structure used to store TLV entries */ 
@@ -50,10 +58,13 @@ struct tlv_buf {
 	size_t _tail_idx; /**< Increments on push */
 };
 
+#ifdef    TLV_IMPLEMENTATION
 /** Initialize TLV buffer. Provide pointer to uint8_t memory to be
  *  used by TLV entries and buffer capacity in bytes */
-void tlv_buf_init(struct tlv_buf *self, uint8_t *mem, const size_t cap)
+static void tlv_buf_init(struct tlv_buf *self, uint8_t *mem, const size_t cap)
 {
+	assert(self && mem && (cap > 0u));
+
 	self->_mem = mem;
 	self->_cap = cap;
 
@@ -62,9 +73,11 @@ void tlv_buf_init(struct tlv_buf *self, uint8_t *mem, const size_t cap)
 }
 
 /** Initialize TLV entry to be used by PUSH operation */
-void tlv_entry_init(struct tlv_entry *self,
-		    const uint8_t tag, const uint8_t len, void *val)
+static void tlv_entry_init(struct tlv_entry *self, const uint8_t tag,
+			   const uint8_t len, void *val)
 {
+	assert(self && val);
+
 	self->tag = tag;
 	self->len = len;
 	self->val = val;
@@ -72,14 +85,18 @@ void tlv_entry_init(struct tlv_entry *self,
 
 /** Push(FIFO) tag, len and val to TLV buffer.
  *  Returns (bool) true on success */
-bool tlv_buf_push(struct tlv_buf *self, struct tlv_entry *entry)
+static bool tlv_buf_push(struct tlv_buf *self, struct tlv_entry *entry)
 {
-	bool result = false;
+	bool   result;
+	size_t header_size;
+	size_t entry_size;
+	size_t new_tail_idx;
 
-	size_t header_size = sizeof(entry->tag) + sizeof(entry->len);
-
-	size_t entry_size   = header_size + entry->len;
-	size_t new_tail_idx = self->_tail_idx + entry_size;
+	assert(self && entry);
+	result       = false;
+	header_size  = sizeof(entry->tag) + sizeof(entry->len);
+	entry_size   = header_size + entry->len;
+	new_tail_idx = self->_tail_idx + entry_size;
 
 	if (new_tail_idx < self->_cap) {
 		self->_mem[self->_tail_idx] = entry->tag;
@@ -100,12 +117,16 @@ bool tlv_buf_push(struct tlv_buf *self, struct tlv_entry *entry)
 
 /** Pop(FIFO) entry from TLV buffer, which contains tag, len and val.
  *  Returns (bool) true on success */
-bool tlv_buf_pop(struct tlv_buf *self, struct tlv_entry *entry)
+static bool tlv_buf_pop(struct tlv_buf *self, struct tlv_entry *entry)
 {
-	bool result = false;
+	bool   result;
+	size_t header_size;
 
-	size_t header_size = sizeof(entry->tag) + sizeof(entry->len);
+	assert(self && entry);
+	result      = false;
+	header_size = sizeof(entry->tag) + sizeof(entry->len);
 
+	/* There's no extra check for full length, which might be dangerous */
 	if ((self->_head_idx + header_size) <= self->_tail_idx) {
 		entry->tag = self->_mem[self->_head_idx];
 		self->_head_idx += sizeof(entry->tag);
@@ -122,9 +143,35 @@ bool tlv_buf_pop(struct tlv_buf *self, struct tlv_entry *entry)
 	return result;
 }
 
-/** Empties TLV buffer */
-void tlv_buf_flush(struct tlv_buf *self)
+/** Resets TLV buffer head, so tlv_buf_pop will read the same data again */
+static void tlv_buf_reset_head(struct tlv_buf *self)
 {
+	assert(self);
+	self->_head_idx = 0u;
+}
+
+/** Resets TLV buffer to its initial state */
+static void tlv_buf_reset(struct tlv_buf *self)
+{
+	assert(self);
 	self->_head_idx = 0u;
 	self->_tail_idx = 0u;
 }
+
+/** Get occupied memory size */
+static size_t tlv_buf_get_occupied_mem_size(struct tlv_buf *self)
+{
+	assert(self);
+
+	return self->_tail_idx;
+}
+
+/** Get free(remaining) memory size */
+static size_t tlv_buf_get_free_mem_size(struct tlv_buf *self)
+{
+	assert(self);
+
+	return self->_cap - self->_tail_idx;
+}
+#endif /* TLV_IMPLEMENTATION */
+#endif /* TLV_HEADER_GUARD */

@@ -44,7 +44,7 @@ test: $(SOURCE_FILES)
 	@echo "--- Compiling and running tests ---"
 	# Compile the test source file(s)
 	gcc $(SOURCE_FILES) -std=c89 -pedantic -Wall -Wextra -g \
-	  -fsanitize=undefined -fsanitize-undefined-trap-on-error \
+	  -fsanitize=undefined -fsanitize-undefined-trap-on-error -fanalyzer \
 	  -o $(TEST_OUTPUT)
 	# Run the compiled test executable
 	./$(TEST_OUTPUT)

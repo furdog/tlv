@@ -1,70 +1,139 @@
-#include "tlv.h"
 #include <stdio.h>
 
-/* Various log entry types */
-enum my_log_entry_types {
-	MY_LOG_ENTRY_TYPE1,
-	MY_LOG_ENTRY_TYPE2
+#define TLV_IMPLEMENTATION
+#include "tlv.h"
+
+/** Example widget types */
+enum gui_widget_type {
+	GUI_WIDGET_TYPE_BOX,
+	GUI_WIDGET_TYPE_TEXT
 };
 
-/* Various log entry structures */
-struct my_log_entry {
-	const char *label;
-
-	uint16_t some_u16_data;
-
-	uint32_t timestamp;
+/** Example widget box */
+struct gui_widget_box {
+	uint16_t x; /**< x position */
+	uint16_t y; /**< y position */
+	uint16_t w; /**< w width */
+	uint16_t h; /**< h height */
 };
 
-struct my_log_entry2 {
-	uint16_t some_u16_data;
+/** Example widget text */
+struct gui_widget_text {
+	uint16_t x; /**< x position */
+	uint16_t y; /**< y position */
+
+	const char *text; /**< some text */
 };
+
+/** Pushes box widget into tlv buffer */
+bool gui_widget_box_push(struct tlv_buf *self, struct gui_widget_box *w)
+{
+	struct tlv_entry entry;
+
+	tlv_entry_init(&entry, GUI_WIDGET_TYPE_BOX,
+		       sizeof(struct gui_widget_box), w);
+	return tlv_buf_push(self, &entry);
+}
+
+/** Pushes text widget into tlv buffer */
+bool gui_widget_text_push(struct tlv_buf *self, struct gui_widget_text *w)
+{
+	struct tlv_entry entry;
+
+	tlv_entry_init(&entry, GUI_WIDGET_TYPE_TEXT,
+		       sizeof(struct gui_widget_text), w);
+	return tlv_buf_push(self, &entry);
+}
+
+/** Prints widgets */
+void gui_widget_parse_print(struct tlv_buf *self, struct tlv_entry *entry)
+{
+	assert(self && entry);
+
+	switch (entry->tag) {
+	case GUI_WIDGET_TYPE_BOX: {
+		struct gui_widget_box w;
+		memcpy(&w, entry->val, entry->len);
+		printf("box: x:%u, y:%u, w:%u, h:%u\n", w.x, w.y, w.w, w.h);
+		break;
+	}
+
+	case GUI_WIDGET_TYPE_TEXT: {
+		struct gui_widget_text w;
+		memcpy(&w, entry->val, entry->len);
+		printf("box: x:%u, y:%u, text:%s\n", w.x, w.y, w.text);
+		break;
+	}
+
+	default:
+		printf("Unknown widget type: %u\n", entry->tag);
+		break;
+	}
+}
 
 int main()
 {
-	struct tlv_buf   jour;
 	struct tlv_entry entry;
 
-	/* Prepare user defined log entries */
-	struct my_log_entry mle_1;
-	struct my_log_entry mle_2;
+	/* TLV header size && occupied memory counter. */
+	size_t occupied_mem = 0u;
 
-	struct my_log_entry2 mle2_1;
-	struct my_log_entry2 mle2_2;
+	/* Widgets */
+	struct gui_widget_box  box  = {50, 50, 100, 100};
+	struct gui_widget_text text = {55, 55, "Hello Box!"};
 
-	uint8_t journal_data[80u];
-	tlv_buf_init(&jour, journal_data, 80u);
+	/* Some random value */
+	uint8_t some_val = 137;
 
-	mle_1.label = "my log entry";
-	mle_1.some_u16_data = 1337;
-	mle_1.timestamp = 999;
+	/* Create and initialize TLV buffer that will store widgets */
+	struct tlv_buf widgets;
+	uint8_t widget_data[80u];
+	tlv_buf_init(&widgets, widget_data, 80u);
+	assert(tlv_buf_get_free_mem_size(&widgets) == 80u);
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == 0u);
 
-	mle2_1.some_u16_data = 0xCAFE;
+	/* Put some random value into widgets buffer (just for test) */
+	tlv_entry_init(&entry, some_val, sizeof(some_val), &some_val);
+	tlv_buf_push(&widgets, &entry);
 
-	tlv_entry_init(&entry, MY_LOG_ENTRY_TYPE2, sizeof(mle2_2), &mle2_1);
-	tlv_buf_push(&jour, &entry);
+	occupied_mem += TLV_TAGLEN_SIZE + sizeof(some_val);
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == occupied_mem);
 
-	tlv_entry_init(&entry, MY_LOG_ENTRY_TYPE1, sizeof(mle_1), &mle_1);
-	tlv_buf_push(&jour, &entry);
+	/* Put actual widgets */
+	gui_widget_box_push(&widgets, &box);
+	occupied_mem += TLV_TAGLEN_SIZE + sizeof(box);
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == occupied_mem);
 
-	if ((tlv_buf_pop(&jour, &entry) == true) &&
-	     entry.tag == MY_LOG_ENTRY_TYPE2) {
-		memcpy(&mle2_2, entry.val, entry.len);
+	gui_widget_text_push(&widgets, &text);
+	occupied_mem += TLV_TAGLEN_SIZE + sizeof(text);
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == occupied_mem);
 
-		printf("Type 2 entry: %X\n", mle2_2.some_u16_data);
+	text.y += 16;
+	text.text = "modified!";
+	gui_widget_text_push(&widgets, &text);
+	occupied_mem += TLV_TAGLEN_SIZE + sizeof(text);
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == occupied_mem);
+
+	/* Pop widgets and parse and print their values */
+	while (tlv_buf_pop(&widgets, &entry) == true) {
+		gui_widget_parse_print(&widgets, &entry);
 	}
 
-	if ((tlv_buf_pop(&jour, &entry) == true) &&
-	     entry.tag == MY_LOG_ENTRY_TYPE1) {
-		memcpy(&mle_2, entry.val, entry.len);
-
-		printf("[%u] %s: %u\n", mle_2.timestamp, mle_2.label,
-			mle_2.some_u16_data);
+	/* Try again */
+	tlv_buf_reset_head(&widgets);
+	while (tlv_buf_pop(&widgets, &entry) == true) {
+		gui_widget_parse_print(&widgets, &entry);
 	}
 
-	if (tlv_buf_pop(&jour, &entry) == false) {
-		printf("nah\n");
+	/* No widgets must be stored at this point */
+	if (tlv_buf_pop(&widgets, &entry) == false) {
+		printf("No widgets stored!\n");
 	}
+
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == occupied_mem);
+
+	tlv_buf_reset(&widgets);
+	assert(tlv_buf_get_occupied_mem_size(&widgets) == 0u);
 
 	return 0;
 }
