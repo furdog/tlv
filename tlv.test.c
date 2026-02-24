@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-#define TLV_IMPLEMENTATION
 #include "tlv.h"
 
 /** Example widget types */

@@ -26,9 +26,8 @@
  * Be free, be wise and take care of yourself!
  * With best wishes and respect, furdog
  */
-
-#ifndef   TLV_HEADER_GUARD
-#define   TLV_HEADER_GUARD
+ 
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -58,7 +57,6 @@ struct tlv_buf {
 	size_t _tail_idx; /**< Increments on push */
 };
 
-#ifdef    TLV_IMPLEMENTATION
 /** Initialize TLV buffer. Provide pointer to uint8_t memory to be
  *  used by TLV entries and buffer capacity in bytes */
 static void tlv_buf_init(struct tlv_buf *self, uint8_t *mem, const size_t cap)
@@ -173,5 +171,3 @@ static size_t tlv_buf_get_free_mem_size(struct tlv_buf *self)
 
 	return self->_cap - self->_tail_idx;
 }
-#endif /* TLV_IMPLEMENTATION */
-#endif /* TLV_HEADER_GUARD */
